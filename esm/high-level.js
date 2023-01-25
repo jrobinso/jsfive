@@ -57,7 +57,16 @@ export class Group {
   }
   
   async init(dataobjects) {
-    this._links = await dataobjects.get_links();
+
+    // Changes to support hdf5-indexed-reader  JTR
+    const index = this.file.index;
+    if (index && this.name in index) {
+      this._links = index[this.name];
+    } else {
+      this._links = await dataobjects.get_links();
+    }
+    // End of changes to support hdf5-indexed-reader
+
     this._dataobjects = dataobjects;
     this._attrs = null;  // cached property
     this._keys = null;
@@ -239,7 +248,8 @@ export class File extends Group {
     this.ready = this.init(fh, filename);
   }
 
-  async init(fh, filename) {
+  async init(fh, filename, options) {
+
     var superblock = new SuperBlock(fh, 0);
     await superblock.ready;
     var offset = await superblock.get_offset_to_dataobjects();
@@ -250,7 +260,18 @@ export class File extends Group {
     this.file = this;
     this.name = '/';
 
-    this._links = await dataobjects.get_links();
+    // Changes to support hdf5-indexed-reader (JTR)
+    if(options.index) {
+      this.index = index;
+    }
+    if (this.index && this.name in this.index) {
+      this._links = this.index[this.name];
+    } else {
+      this._links = await dataobjects.get_links();
+    }
+    // End of change to support hdf5-indexed-reader
+
+
     this._dataobjects = dataobjects;
     this._attrs = null;  // cached property
     this._keys = null;
