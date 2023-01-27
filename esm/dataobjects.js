@@ -459,6 +459,35 @@ export class DataObjects {
     return [header, creation_order_size, offset];
   }
 
+
+  /**
+   * Find the link with the specified name.  Used to search for a specific object before "_links" has been set.
+   * Main purpose is to support finding an embedded index quickly, without potentially visiting all top level
+   * objects.   If no link is found return undefined.
+   * @param name
+   * @returns {Promise<any|*|undefined>}
+   */
+  async find_link(name) {
+    if(this._links) {  // This should never be the case, here for completeness
+      for(link of this._links) {
+        if(name === link[0]) {
+          return link;
+        }
+      }
+    } else {
+      const links = [];
+      for await (const link of this.iter_links()) {
+        if (name === link[0]) {
+          return link;
+        }
+        links.push(link);
+      }
+      // If we get this far we've walked the whole tree.  Set the links field to avoid another walk with get_links()
+      this._links = links;
+    }
+    return undefined;
+  }
+
   async get_links() {
     //""" Return a dictionary of link_name: offset """
     const links = [];
@@ -707,6 +736,9 @@ export class DataObjects {
           output[i] = view[item_getter](i * item_size, !item_is_big_endian, item_size);
         }
         return output
+      } else if(5 === dtype.datatype_class) {
+        // Opaque datatype,just return bytes
+        return this.fh.slice(data_offset, data_offset + dtype.size);
       }
       else {
         throw "not Implemented - no proper dtype defined";

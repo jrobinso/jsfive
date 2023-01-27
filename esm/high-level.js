@@ -1,6 +1,7 @@
 import {DataObjects} from './dataobjects.js';
 import {SuperBlock} from './misc-low-level.js';
 export { Filters } from './filters.js';
+import * as pako from '../node_modules/pako/dist/pako.esm.mjs';
 
 export class Group {
   /*
@@ -238,17 +239,27 @@ export class File extends Group {
       Size of the user block in bytes (currently always 0).
   */
 
-  constructor (fh, filename) {
+  constructor (fh, filename, options) {
     //""" initalize. """
     //if hasattr(filename, 'read'):
     //    if not hasattr(filename, 'seek'):
     //        raise ValueError(
     //            'File like object must have a seek method')
     super('/', null);
+
+    // Changes to support hdf5-indexed-reader (JTR)
+    if(options && options.index) {
+      this.index = options.index;
+      }
+    if(options && options.indexName) {
+      this.indexName = options.indexName
+    }
+    // End of change to support hdf5-indexed-reader
+
     this.ready = this.init(fh, filename);
   }
 
-  async init(fh, filename, options) {
+  async init(fh, filename) {
 
     var superblock = new SuperBlock(fh, 0);
     await superblock.ready;
@@ -261,9 +272,19 @@ export class File extends Group {
     this.name = '/';
 
     // Changes to support hdf5-indexed-reader (JTR)
-    if(options.index) {
-      this.index = index;
+    if (!this.index) {
+      const indexName = this.indexName || "_index";
+      const index_link = await dataobjects.find_link(indexName)
+      if (index_link) {
+        const dataobject = new DataObjects(fh, index_link[1])
+        await dataobject.ready
+        const comp_index_data = await dataobject.get_data()
+        const inflated = ungzip_1(comp_index_data);
+        const json = new TextDecoder().decode(inflated);
+        this.index = JSON.parse(json);
+      }
     }
+
     if (this.index && this.name in this.index) {
       this._links = this.index[this.name];
     } else {
@@ -291,6 +312,14 @@ export class File extends Group {
     return this.visititems(
       (y) => {(y._dataobjects.offset == obj_addr) ? y : null;}
     );
+  }
+
+  /**
+   * Return the object index, if any
+   * @returns {*}
+   */
+  get index() {
+    return this.index
   }
 }
 
