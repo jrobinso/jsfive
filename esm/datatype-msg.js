@@ -32,7 +32,10 @@ export class DatatypeMessage {
       throw "Bitfield datatype class not supported."
     }
     else if (datatype_class == DATATYPE_OPAQUE) {
-      throw "Opaque datatype class not supported."
+      return {
+        datatype_class: DATATYPE_OPAQUE,
+        size: datatype_msg.get("size")
+      }
     }
     else if (datatype_class == DATATYPE_COMPOUND) {
       return this._determine_dtype_compound(datatype_msg);

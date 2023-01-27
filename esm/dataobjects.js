@@ -244,22 +244,30 @@ export class DataObjects {
       return [name, null];
     }
 
+
     offset += _padded_size(attr_map.get('datatype_size'), padding_multiple);
 
-    //# read in the dataspace information
+      //# read in the dataspace information
     let shape = await this.determine_data_shape(this.fh, offset);
-    let items = shape.reduce(function (a, b) { return a * b }, 1); // int(np.product(shape))
+    let items = shape.reduce(function (a, b) {
+        return a * b
+      }, 1); // int(np.product(shape))
     offset += _padded_size(attr_map.get('dataspace_size'), padding_multiple)
 
-    //# read in the value(s)
-    var value = await this._attr_value(dtype, this.fh, items, offset);
-    //let value = [42];
+    if(5 === dtype.datatype_class) {
+      // OPAQUE data type, just return the raw bytes
+      value = await this.fh.slice(offset, offset + dtype.size);
+    } else {
 
-    if (shape.length == 0) { // == ():
-      value = value[0];
-    }
-    else {
-      //value = value.reshape(shape)
+      //# read in the value(s)
+      var value = await this._attr_value(dtype, this.fh, items, offset);
+      //let value = [42];
+
+      if (shape.length == 0) { // == ():
+        value = value[0];
+      } else {
+        //value = value.reshape(shape)
+      }
     }
     return [name, value];
   }
