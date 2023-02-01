@@ -330,10 +330,12 @@ export class DataObjects {
     }
     else {
       let [getter, big_endian, size] = dtype_getter(dtype);
-      let view = new DataView64(buf, 0);
+      const arrayBuffer = await buf.slice(offset, offset + count * size)
+      let view = new DataView64(arrayBuffer, 0);
+      let bufferOffset = 0
       for (var i = 0; i < count; i++) {
-        value[i] = view[getter](offset, !big_endian, size);
-        offset += size;
+        value[i] = view[getter](bufferOffset, !big_endian, size);
+        bufferOffset += size;
       }
     }
     return value
