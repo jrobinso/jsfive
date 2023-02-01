@@ -247,19 +247,11 @@ export class File extends Group {
     //            'File like object must have a seek method')
     super('/', null);
 
-    // Changes to support hdf5-indexed-reader (JTR)
-    if(options && options.index) {
-      this.index = options.index;
-      }
-    if(options && options.indexName) {
-      this.indexName = options.indexName
-    }
-    // End of change to support hdf5-indexed-reader
 
-    this.ready = this.init(fh, filename);
+    this.ready = this.init(fh, filename, options);
   }
 
-  async init(fh, filename) {
+  async init(fh, filename, options) {
 
     var superblock = new SuperBlock(fh, 0);
     await superblock.ready;
@@ -270,20 +262,48 @@ export class File extends Group {
     this.parent = this;
     this.file = this;
     this.name = '/';
+    this._dataobjects = dataobjects;
+    this._attrs = null;  // cached property
+    this._keys = null
+    this._fh = fh
+    this.filename = filename || '';
+    this.mode = 'r';
+    this.userblock_size = 0;
 
     // Changes to support hdf5-indexed-reader (JTR)
-    if (!this.index) {
-      const indexName = this.indexName || "_index";
-      const index_link = await dataobjects.find_link(indexName)
-      if (index_link) {
-        const dataobject = new DataObjects(fh, index_link[1])
-        await dataobject.ready
-        const comp_index_data = await dataobject.get_data()
-        const inflated = ungzip_1(comp_index_data);
-        const json = new TextDecoder().decode(inflated);
-        this.index = JSON.parse(json);
+    if(options && options.index) {
+      this.index = options.index;  // Explicit index -- this is not common
+    } else {
+      // Search for an index.  First we check for an explicit pointer (indexOffset).  Next we check the root
+      // object (File) attributes.  Finally we walk links searching
+      let index_offset;
+      if (options && options.indexOffset) {
+        index_offset = options.indexOffset;
+      } else {
+          const attrs = await this.attrs;
+          if (attrs.hasOwnProperty("_index_offset")) {
+            index_offset = attrs("_index_offset");
+          } else {
+            const indexName = this.indexName || "_index";
+            const index_link = await dataobjects.find_link(indexName);
+            if (index_link) {
+              index_offset = index_link[1];
+            }
+          }
+        }
+        if (index_offset) {
+          try {
+            const dataobject = new DataObjects(fh, index_offset);
+            await dataobject.ready;
+            const comp_index_data = await dataobject.get_data();
+            const inflated = pako.ungzip(comp_index_data);
+            const json = new TextDecoder().decode(inflated);
+            this.index = JSON.parse(json);
+          } catch (e) {
+            console.error(`Error loading index by offset ${e}`)
+          }
+        }
       }
-    }
 
     if (this.index && this.name in this.index) {
       this._links = this.index[this.name];
@@ -291,18 +311,9 @@ export class File extends Group {
       this._links = await dataobjects.get_links();
     }
     // End of change to support hdf5-indexed-reader
-
-
-    this._dataobjects = dataobjects;
-    this._attrs = null;  // cached property
-    this._keys = null;
-    
-    this._fh = fh
-    this.filename = filename || '';
-
-    this.mode = 'r';
-    this.userblock_size = 0;
   }
+
+  // End of change to support hdf5-indexed-reader
 
   _get_object_by_address(obj_addr) {
     //""" Return the object pointed to by a given address. """
@@ -312,14 +323,6 @@ export class File extends Group {
     return this.visititems(
       (y) => {(y._dataobjects.offset == obj_addr) ? y : null;}
     );
-  }
-
-  /**
-   * Return the object index, if any
-   * @returns {*}
-   */
-  get index() {
-    return this.index
   }
 }
 
