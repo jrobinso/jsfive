@@ -432,7 +432,6 @@ export class Dataset extends Array {
     const value = await this.value
     const shape = await this.shape
     return create_nested_array(value, shape);
-    return nested;
   }
 
   async getValue(data) {
