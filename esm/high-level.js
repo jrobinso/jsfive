@@ -282,7 +282,7 @@ export class File extends Group {
       } else {
           const attrs = await this.attrs;
           if (attrs.hasOwnProperty("_index_offset")) {
-            index_offset = attrs("_index_offset");
+            index_offset = attrs["_index_offset"];
           } else {
             const indexName = this.indexName || "_index";
             const index_link = await dataobjects.find_link(indexName);
@@ -401,9 +401,9 @@ export class Dataset extends Array {
   get value() {
     var data = this._dataobjects.get_data();
     if (this._astype == null) {
-      return data
+      return this.getValue(data)
     }
-    return data.astype(this._astype);
+    return data.astype(this._astype);  // TODO -- this doesn't seem to be implemented anywhere
   }
 
   get shape() {
@@ -420,6 +420,28 @@ export class Dataset extends Array {
 
   get fillvalue() {
     return this._dataobjects.get_fillvalue();
+  }
+
+  /**
+   * Adapted from H5WASM *
+   * @param value
+   * @param shape
+   * @returns {Promise<string|*>}
+   */
+  async to_array() {
+    const value = await this.value
+    const shape = await this.shape
+    return create_nested_array(value, shape);
+    return nested;
+  }
+
+  async getValue(data) {
+    const dtype = await this.dtype;
+    if(dtype.startsWith("S")) {
+      return (await data).map(s => s.substr(0,s.indexOf('\0')));
+    } else {
+      return data;
+    }
   }
 }
 
@@ -440,3 +462,29 @@ function normpath(path) {
   return path.replace(/\/(\/)+/g, '/'); 
   // path = posixpath.normpath(y)
 }
+
+// From h5wasm
+
+function create_nested_array(value, shape) {
+  // check that shapes match:
+  const total_length = value.length;
+  const dims_product = shape.reduce((previous, current) => (previous * current), 1);
+  if (total_length !== dims_product) {
+    console.warn(`shape product: ${dims_product} does not match length of flattened array: ${total_length}`);
+  }
+  // Get reshaped output:
+  let output = value;
+  const subdims = shape.slice(1).reverse();
+  for (let dim of subdims) {
+    // in each pass, replace input with array of slices of input
+    const new_output = [];
+    const { length } = output;
+    let cursor = 0;
+    while (cursor < length) {
+      new_output.push(output.slice(cursor, cursor += dim));
+    }
+    output = new_output;
+  }
+  return output;
+}
+
