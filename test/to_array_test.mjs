@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import {strict as assert} from 'assert'
-import {File} from '../dist/esm/index.mjs'
+import {File} from '../../hdf5-indexed-reader/src/jsfive/index.mjs'
 import {AsyncBuffer} from "./asyncBuffer.mjs"
 
 

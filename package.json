@@ -3,7 +3,7 @@
   "version": "0.3.13",
   "description": "A pure javascript HDF5 file reader, based on pyfive",
   "main": "./dist/cjs/index.js",
-  "module": "./dist/esm/index.mjs",
+  "module": "../hdf5-indexed-reader/src/jsfive/index.mjs",
   "exports": {
     ".": {
       "import": "./dist/esm/index.mjs",

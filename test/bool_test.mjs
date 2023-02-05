@@ -2,7 +2,7 @@
 
 import { strict as assert } from 'assert';
 import {AsyncBuffer} from "./asyncBuffer.mjs"
-import {File} from "../dist/esm/index.mjs"
+import {File} from "../../hdf5-indexed-reader/src/jsfive/index.mjs"
 
 async function bool_test() {
 
