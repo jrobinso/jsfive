@@ -1,3 +1,26 @@
+This repository is a fork of [jsfive](https://github.com/usnistgov/jsfive), specifically the `async` branch of that 
+project at commit `18d36e27`.   The fork adds support for an optional container index which maps fully qualified
+container names to their file offset positions.
+
+
+## Motivation
+
+Support for the container `index` was motivated by the need to read individual datasets from very large HDF5 files (> 200 GB)
+which contains hundreds of thousands of small datasets.     If the dataset location is known this can be done with a 
+single or at most a few http requests.   However, deterimining the file offset of the dataset requires walking a 
+linked list of nodes from its parent.  Each link in the  linked list can be anywhere in the file.   In the worst case, 
+which is often the actual case,  an individual seek, or http request, is required for each link.   For local file
+access this is not a huge issue as seeks are very fast.  However this becomes untenable quickly when accessing 
+a file remotely with http range requests.  The index negates the need to walk the  list of container links at
+runtime.   
+
+Other minor improvements
+* Support for OPAQUE data type
+* Add method ```to_array``` to expand a multi-dimensional array.   The method is compatible with the equivalent in [h5wasm](https://github.com/usnistgov/h5wasm).
+
+
+# ORIGINAL JSFIVE README FOLLOWS
+
 # jsfive: A pure javascript HDF5 file reader
 
 jsfive is a library for reading (not writing) HDF5 files using pure javascript, such as in the browser.  It is based on the [pyfive](https://github.com/jjhelmus/pyfive) pure-python implementation of an HDF5 reader.
