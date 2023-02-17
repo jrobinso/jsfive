@@ -7,10 +7,10 @@ container names to their file offset positions.
 
 Support for the container `index` was motivated by the need to read individual datasets from very large HDF5 files (> 200 GB)
 which contains hundreds of thousands of small datasets.     If the dataset location is known this can be done with a 
-single or at most a few http requests.   However, deterimining the file offset of the dataset requires walking a 
+single or at most a few http requests.   However, determining the file offset of the dataset requires walking a 
 linked list of nodes from its parent.  Each link in the  linked list can be anywhere in the file.   In the worst case, 
-which is often the actual case,  an individual seek, or http request, is required for each link.   For local file
-access this is not a huge issue as seeks are very fast.  However this becomes untenable quickly when accessing 
+which is often the actual case,  an http range request, is required for each link.   For local file
+access this is not a significant issue as seeks are very fast.  However this becomes untenable when accessing 
 a file remotely with http range requests.  The index negates the need to walk the  list of container links at
 runtime.   
 
