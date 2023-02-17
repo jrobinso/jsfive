@@ -1,6 +1,7 @@
 import {DataObjects} from './dataobjects.js';
 import {SuperBlock} from './misc-low-level.js';
 export { Filters } from './filters.js';
+import * as pako from '../node_modules/pako/dist/pako.esm.mjs';
 
 export class Group {
   /*
@@ -44,7 +45,7 @@ export class Group {
    * @param {boolean} [getterProxy=false]
    * @returns {Group}
    */
-  constructor(name, dataobjects, parent, getterProxy=false) {
+  constructor(name, parent) {
     if (parent == null) {
       this.parent = this;
       this.file = this;
@@ -54,14 +55,22 @@ export class Group {
       this.file = parent.file;
     }
     this.name = name;
+  }
+  
+  async init(dataobjects) {
 
-    this._links = dataobjects.get_links();
+    // Changes to support hdf5-indexed-reader  JTR
+    const index = this.file.index;
+    if (index && this.name in index) {
+      this._links = index[this.name];
+    } else {
+      this._links = await dataobjects.get_links();
+    }
+    // End of changes to support hdf5-indexed-reader
+
     this._dataobjects = dataobjects;
     this._attrs = null;  // cached property
     this._keys = null;
-    if (getterProxy) {
-      return new Proxy(this, groupGetHandler);
-    }
   }
 
   get keys() {
@@ -91,7 +100,7 @@ export class Group {
     return obj
   }
 
-  get(y) {
+  async get(y) {
     //""" x.__getitem__(y) <==> x[y] """
     if (typeof(y) == 'number') {
       return this._dereference(y);
@@ -132,6 +141,8 @@ export class Group {
     }
 
     var dataobjs = new DataObjects(this.file._fh, link_target);
+    await dataobjs.ready;
+
     if (dataobjs.is_dataset) {
       if (additional_obj != '.') {
         throw obj_name + ' is a dataset, not a group';
@@ -139,7 +150,8 @@ export class Group {
       return new Dataset(obj_name, dataobjs, this);
     }
     else {
-      var new_group = new Group(obj_name, dataobjs, this);
+      var new_group = new Group(obj_name, this);
+      await new_group.init(dataobjs);
       return new_group.get(additional_obj);
     }
   }
@@ -227,26 +239,81 @@ export class File extends Group {
       Size of the user block in bytes (currently always 0).
   */
 
-  constructor (fh, filename) {
+  constructor (fh, filename, options) {
     //""" initalize. """
     //if hasattr(filename, 'read'):
     //    if not hasattr(filename, 'seek'):
     //        raise ValueError(
     //            'File like object must have a seek method')
-    
-    var superblock = new SuperBlock(fh, 0);
-    var offset = superblock.offset_to_dataobjects;
-    var dataobjects = new DataObjects(fh, offset);
-    super('/', dataobjects, null);
-    this.parent = this;
+    super('/', null);
 
+
+    this.ready = this.init(fh, filename, options);
+  }
+
+  async init(fh, filename, options) {
+
+    var superblock = new SuperBlock(fh, 0);
+    await superblock.ready;
+    var offset = await superblock.get_offset_to_dataobjects();
+    var dataobjects = new DataObjects(fh, offset);
+    await dataobjects.ready;
+    //   constructor(name, dataobjects, parent, getterProxy=false) {
+    this.parent = this;
+    this.file = this;
+    this.name = '/';
+    this._dataobjects = dataobjects;
+    this._attrs = null;  // cached property
+    this._keys = null
     this._fh = fh
     this.filename = filename || '';
-
-    this.file = this;
     this.mode = 'r';
     this.userblock_size = 0;
+
+    // Changes to support hdf5-indexed-reader (JTR)
+    if(options && options.index) {
+      this.index = options.index;  // Explicit index -- this is not common
+    } else {
+      // Search for an index.  First we check for an explicit pointer (indexOffset).  Next we check the root
+      // object (File) attributes.  Finally we walk links searching
+      let index_offset;
+      if (options && options.indexOffset) {
+        index_offset = options.indexOffset;
+      } else {
+          const attrs = await this.attrs;
+          if (attrs.hasOwnProperty("_index_offset")) {
+            index_offset = attrs["_index_offset"];
+          } else {
+            const indexName = this.indexName || "_index";
+            const index_link = await dataobjects.find_link(indexName);
+            if (index_link) {
+              index_offset = index_link[1];
+            }
+          }
+        }
+        if (index_offset) {
+          try {
+            const dataobject = new DataObjects(fh, index_offset);
+            await dataobject.ready;
+            const comp_index_data = await dataobject.get_data();
+            const inflated = pako.ungzip(comp_index_data);
+            const json = new TextDecoder().decode(inflated);
+            this.index = JSON.parse(json);
+          } catch (e) {
+            console.error(`Error loading index by offset ${e}`)
+          }
+        }
+      }
+
+    if (this.index && this.name in this.index) {
+      this._links = this.index[this.name];
+    } else {
+      this._links = await dataobjects.get_links();
+    }
+    // End of change to support hdf5-indexed-reader
   }
+
+  // End of change to support hdf5-indexed-reader
 
   _get_object_by_address(obj_addr) {
     //""" Return the object pointed to by a given address. """
@@ -334,9 +401,9 @@ export class Dataset extends Array {
   get value() {
     var data = this._dataobjects.get_data();
     if (this._astype == null) {
-      return data
+      return this.getValue(data)
     }
-    return data.astype(this._astype);
+    return data.astype(this._astype);  // TODO -- this doesn't seem to be implemented anywhere
   }
 
   get shape() {
@@ -352,7 +419,28 @@ export class Dataset extends Array {
   }
 
   get fillvalue() {
-    return this._dataobjects.fillvalue;
+    return this._dataobjects.get_fillvalue();
+  }
+
+  /**
+   * Adapted from H5WASM *
+   * @param value
+   * @param shape
+   * @returns {Promise<string|*>}
+   */
+  async to_array() {
+    const value = await this.value
+    const shape = await this.shape
+    return create_nested_array(value, shape);
+  }
+
+  async getValue(data) {
+    const dtype = await this.dtype;
+    if(dtype.startsWith("S")) {
+      return (await data).map(s => s.substr(0,s.indexOf('\0')));
+    } else {
+      return data;
+    }
   }
 }
 
@@ -373,3 +461,29 @@ function normpath(path) {
   return path.replace(/\/(\/)+/g, '/'); 
   // path = posixpath.normpath(y)
 }
+
+// From h5wasm
+
+function create_nested_array(value, shape) {
+  // check that shapes match:
+  const total_length = value.length;
+  const dims_product = shape.reduce((previous, current) => (previous * current), 1);
+  if (total_length !== dims_product) {
+    console.warn(`shape product: ${dims_product} does not match length of flattened array: ${total_length}`);
+  }
+  // Get reshaped output:
+  let output = value;
+  const subdims = shape.slice(1).reverse();
+  for (let dim of subdims) {
+    // in each pass, replace input with array of slices of input
+    const new_output = [];
+    const { length } = output;
+    let cursor = 0;
+    while (cursor < length) {
+      new_output.push(output.slice(cursor, cursor += dim));
+    }
+    output = new_output;
+  }
+  return output;
+}
+
