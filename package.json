@@ -16,8 +16,7 @@
     "build_browser": "esbuild index.js --bundle --sourcemap --target=es2020 --outfile=dist/browser/hdf5.js --format=iife --global-name=hdf5",
     "build_commonjs": "esbuild index.js --bundle --sourcemap --target=es2020 --outfile=dist/cjs/index.js --format=cjs",
     "build_esm": "esbuild index.js --bundle --format=esm --target=es2020 --outfile=dist/esm/index.mjs",
-    "test": "node ./test/test.mjs",
-    "prepare": "npm run build"
+    "test": "node ./test/test.mjs"
   },
   "repository": {
     "type": "git",
