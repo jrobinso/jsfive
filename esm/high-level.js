@@ -38,10 +38,10 @@ export class Group {
   // _keys;
 
   /**
-   * 
-   * @param {string} name 
-   * @param {DataObjects} dataobjects 
-   * @param {Group} [parent] 
+   *
+   * @param {string} name
+   * @param {DataObjects} dataobjects
+   * @param {Group} [parent]
    * @param {boolean} [getterProxy=false]
    * @returns {Group}
    */
@@ -56,7 +56,7 @@ export class Group {
     }
     this.name = name;
   }
-  
+
   async init(dataobjects) {
 
     // Changes to support hdf5-indexed-reader  JTR
@@ -113,7 +113,7 @@ export class Group {
 
     if (path == '.') {
       return this
-    }    
+    }
     if (/^\//.test(path)) {
       return this.file.get(path.slice(1));
     }
@@ -137,7 +137,7 @@ export class Group {
         return this.get(link_target)
       } catch (error) {
         return null
-      } 
+      }
     }
 
     var dataobjs = new DataObjects(this.file._fh, link_target);
@@ -436,7 +436,7 @@ export class Dataset extends Array {
 
   async getValue(data) {
     const dtype = await this.dtype;
-    if(dtype.startsWith("S")) {
+    if((typeof dtype === 'string' || dtype instanceof String) && dtype.startsWith("S")) {
       return (await data).map(s => s.substr(0,s.indexOf('\0')));
     } else {
       return data;
@@ -458,7 +458,7 @@ function posix_dirname(p) {
 }
 
 function normpath(path) {
-  return path.replace(/\/(\/)+/g, '/'); 
+  return path.replace(/\/(\/)+/g, '/');
   // path = posixpath.normpath(y)
 }
 
