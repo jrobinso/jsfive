@@ -201,7 +201,7 @@ export class BTreeV1RawDataChunks extends BTreeV1 {
         if (size != 8) {
           throw "NotImplementedError('Unsupported Reference type')";
         }
-        var dtype = '<u8';
+        dtype = '<u8';
         item_getter = 'getUint64';
         item_big_endian = false;
         item_size = 8;
